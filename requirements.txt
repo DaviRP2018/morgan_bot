@@ -1,0 +1,4 @@
+pre-commit~=3.4.0
+telebot~=0.0.5
+SpeechRecognition~=3.10.0
+pydub~=0.25.1
