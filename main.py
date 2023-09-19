@@ -1,12 +1,15 @@
 import json
 import logging
-import speech_recognition as sr
-from pydub import AudioSegment
 import os
+
 from datetime import date, datetime
+
+import speech_recognition as sr
 import telebot
-from telebot.types import Message
+
 from decouple import config
+from pydub import AudioSegment
+from telebot.types import Message
 
 
 SAVE_PATH = "tmp"
@@ -17,12 +20,16 @@ def log(message: str, level: str = "info") -> None:
     """
     Levels of Log Message
     There are two built-in levels of the log message.
-    Debug : These are used to give Detailed information, typically of interest only when diagnosing problems.
+    Debug : These are used to give Detailed information, typically of interest
+    only when diagnosing problems.
     Info : These are used to Confirm that things are working as expected
-    Warning : These are used an indication that something unexpected happened, or indicative of some problem in the near
+    Warning : These are used an indication that something unexpected happened,
+    or indicative of some problem in the near
     future
-    Error : This tells that due to a more serious problem, the software has not been able to perform some function
-    Critical : This tells serious error, indicating that the program itself may be unable to continue running
+    Error : This tells that due to a more serious problem, the software has not
+     been able to perform some function
+    Critical : This tells serious error, indicating that the program itself may
+     be unable to continue running
     :param message:
     :param level:
     :rtype: None
@@ -31,7 +38,9 @@ def log(message: str, level: str = "info") -> None:
     message = "{} ==|=====> {}".format(datetime.now().time(), message)
     filename = "logs/log - %s.log" % date.today()
     logging.basicConfig(
-        filename=filename, format="%(asctime)s - %(levelname)s: %(message)s", filemode="w"
+        filename=filename,
+        format="%(asctime)s - %(levelname)s: %(message)s",
+        filemode="w",
     )
     print(message)
     logger = logging.getLogger()
@@ -52,7 +61,7 @@ def log(message: str, level: str = "info") -> None:
         logger.critical(message)
 
 
-def manage_user(message: Message) -> None:
+def save_user(message: Message) -> None:
     log(message.from_user.first_name)
     with open("users.json", "r") as users_json:
         data = users_json.read()
@@ -68,7 +77,7 @@ def clean(file_unique_path) -> None:
     log("Cleaning tmp folder")
     try:
         os.remove(file_unique_path)
-        log(f"Todos os arquivos em 'tmp' foram apagados com sucesso.")
+        log("Todos os arquivos em 'tmp' foram apagados com sucesso.")
     except Exception as err:
         log(f"Ocorreu um erro ao apagar os arquivos: {str(err)}")
 
@@ -77,12 +86,13 @@ def error_message(bot, message, err):
     log(str(err), "error")
     bot.send_message(
         message.from_user.id,
-        "Erro de conexão, por favor tente novamente mais tarde."
+        "Erro de conexão, por favor tente novamente mais tarde.",
     )
 
 
 def prepare_audio(bot, message, sound_source):
     try:
+        log("Escutando seu audio...")
         bot.send_message(message.from_user.id, "Escutando seu audio...")
 
         source = getattr(message, sound_source)
@@ -94,13 +104,24 @@ def prepare_audio(bot, message, sound_source):
         # Parse to WAV
         mime_type = source.mime_type.replace("audio/", "")
         file_unique_path = f"{SAVE_PATH}/{source.file_unique_id}.{mime_type}"
-        with open(file_unique_path, 'wb') as new_file:
+        with open(file_unique_path, "wb") as new_file:
             new_file.write(downloaded_file)
 
+        tries = 0
+        trying = True
+        while tries <= 3 or trying:
+            try:
+                audio = AudioSegment.from_file(file_unique_path, mime_type)
+                wav_file = file_unique_path.replace(f".{mime_type}", ".wav")
+                audio.export(wav_file, format="wav")
+                trying = False
+            except Exception as err:
+                log(str(err), "error")
+                mime_type = VALID_MIME_TYPES[tries]
+                tries += 1
+        if trying:
+            raise Exception("Couldn't convert file")
         # Convert the audio file to OGG format
-        audio = AudioSegment.from_file(file_unique_path, mime_type)
-        wav_file = file_unique_path.replace(f".{mime_type}", ".wav")
-        audio.export(wav_file, format="wav")
 
         # transcribe audio file
         # use the audio file as the audio source
@@ -113,19 +134,21 @@ def prepare_audio(bot, message, sound_source):
 
     except Exception as err:
         log(str(err), "error")
-        bot.send_message(message.from_user.id, "Error")
+        bot.send_message(
+            message.from_user.id, "Oops, tente novamente mais tarde!"
+        )
     else:
-        bot.send_message(message.from_user.id, "Tá aqui o que você quer:")
+        log("Tá aqui o que você quer")
+        bot.send_message(message.from_user.id, "Tá aqui o que você quer")
         bot.send_message(message.chat.id, transcript)
 
 
 def base_reply(bot, message, sound_source):
     try:
-        manage_user(message)
+        save_user(message)
     except Exception as err:
         error_message(bot, message, err)
-    else:
-        prepare_audio(bot, message, sound_source)
+    prepare_audio(bot, message, sound_source)
     # finally:
     #     clean(file_unique_path)
 
@@ -137,9 +160,10 @@ def main() -> None:
         @bot.message_handler(commands=["start", "help"])
         def send_welcome(message: Message) -> None:
             bot.reply_to(
-                message, "Bem vindo! Me grave um audio"
-                         " ou encaminhe um audio mp3 e"
-                         " eu vou tentar transcrever para você usando o Google."
+                message,
+                "Bem vindo! Me grave um audio"
+                " ou encaminhe um audio mp3 e"
+                " eu vou tentar transcrever para você usando o Google.",
             )
 
         @bot.message_handler(func=lambda m: True, content_types=["voice"])
@@ -152,8 +176,6 @@ def main() -> None:
 
         log("Bot started.")
         bot.polling(none_stop=False, interval=0, timeout=20)
-    except AssertionError as err:
-        log(str(err), "error")
     except Exception as err:
         log(str(err), "error")
 
