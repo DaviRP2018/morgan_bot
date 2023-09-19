@@ -7,7 +7,10 @@ from datetime import date, datetime
 import telebot
 from telebot.types import Message
 from decouple import config
-SAVE_PATH = "tmp/"
+
+
+SAVE_PATH = "tmp"
+VALID_MIME_TYPES = ["mp3", "flv", "ogg", "wav"]
 
 
 def log(message: str, level: str = "info") -> None:
@@ -61,16 +64,70 @@ def manage_user(message: Message) -> None:
             users_json.write(json.dumps(users))
 
 
-def clean() -> None:
+def clean(file_unique_path) -> None:
     log("Cleaning tmp folder")
     try:
-        for arquivo in os.listdir("tmp"):
-            caminho_arquivo = os.path.join("tmp", arquivo)
-            if os.path.isfile(caminho_arquivo):
-                os.remove(caminho_arquivo)
+        os.remove(file_unique_path)
         log(f"Todos os arquivos em 'tmp' foram apagados com sucesso.")
     except Exception as err:
         log(f"Ocorreu um erro ao apagar os arquivos: {str(err)}")
+
+
+def error_message(bot, message, err):
+    log(str(err), "error")
+    bot.send_message(
+        message.from_user.id,
+        "Erro de conexão, por favor tente novamente mais tarde."
+    )
+
+
+def prepare_audio(bot, message, sound_source):
+    try:
+        bot.send_message(message.from_user.id, "Escutando seu audio...")
+
+        source = getattr(message, sound_source)
+
+        # Download file
+        file_info = bot.get_file(source.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        # Parse to WAV
+        mime_type = source.mime_type.replace("audio/", "")
+        file_unique_path = f"{SAVE_PATH}/{source.file_unique_id}.{mime_type}"
+        with open(file_unique_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+
+        # Convert the audio file to OGG format
+        audio = AudioSegment.from_file(file_unique_path, mime_type)
+        wav_file = file_unique_path.replace(f".{mime_type}", ".wav")
+        audio.export(wav_file, format="wav")
+
+        # transcribe audio file
+        # use the audio file as the audio source
+        r = sr.Recognizer()
+        with sr.AudioFile(wav_file) as source:
+            audio = r.record(source)  # read the entire audio file
+
+            transcript = r.recognize_google(audio, language="pt-BR")
+        print(transcript)
+
+    except Exception as err:
+        log(str(err), "error")
+        bot.send_message(message.from_user.id, "Error")
+    else:
+        bot.send_message(message.from_user.id, "Tá aqui o que você quer:")
+        bot.send_message(message.chat.id, transcript)
+
+
+def base_reply(bot, message, sound_source):
+    try:
+        manage_user(message)
+    except Exception as err:
+        error_message(bot, message, err)
+    else:
+        prepare_audio(bot, message, sound_source)
+    # finally:
+    #     clean(file_unique_path)
 
 
 def main() -> None:
@@ -87,92 +144,11 @@ def main() -> None:
 
         @bot.message_handler(func=lambda m: True, content_types=["voice"])
         def reply_voice(message: Message) -> None:
-            try:
-                manage_user(message)
-            except Exception as err:
-                log(str(err), "error")
-                bot.send_message(
-                    message.from_user.id, "Erro de conexão, por favor tente novamente mais tarde."
-                )
-            else:
-                try:
-                    bot.send_message(message.from_user.id, "Baixando seu audio...")
-                    file_info = bot.get_file(message.voice.file_id)
-                    downloaded_file = bot.download_file(file_info.file_path)
-                    oga_file_path = "tmp/audio.oga"
-                    wav_file_path = "tmp/audio.wav"
-                    with open(oga_file_path, 'wb') as new_file:
-                        new_file.write(downloaded_file)
-
-                    # Convert the audio file to OGG format
-                    audio = AudioSegment.from_ogg(oga_file_path)
-                    ogg_file = oga_file_path.replace(".oga", ".wav")
-                    audio.export(ogg_file, format="wav")
-
-                    # transcribe audio file
-                    # use the audio file as the audio source
-                    r = sr.Recognizer()
-                    with sr.AudioFile(wav_file_path) as source:
-                        audio = r.record(
-                            source)  # read the entire audio file
-
-                        transcript = r.recognize_google(audio, language="pt-BR")
-                    print(transcript)
-
-                except Exception as err:
-                    log(str(err), "error")
-                    bot.send_message(message.from_user.id, "Error")
-                else:
-                    bot.send_message(message.from_user.id, "Tá aqui o que você quer:")
-                    bot.send_message(message.chat.id, transcript)
-            finally:
-                clean()
+            base_reply(bot, message, "voice")
 
         @bot.message_handler(func=lambda m: True, content_types=["audio"])
         def reply_audio(message: Message) -> None:
-            try:
-                manage_user(message)
-            except Exception as err:
-                log(str(err), "error")
-                bot.send_message(
-                    message.from_user.id,
-                    "Erro de conexão, por favor tente novamente mais tarde."
-                )
-            else:
-                try:
-                    bot.send_message(message.from_user.id,
-                                     "Escutando seu audio...")
-                    file_info = bot.get_file(message.audio.file_id)
-                    downloaded_file = bot.download_file(file_info.file_path)
-                    mp3_file_path = "tmp/audio.mp3"
-                    wav_file_path = "tmp/audio.wav"
-                    with open(mp3_file_path, 'wb') as new_file:
-                        new_file.write(downloaded_file)
-
-                    # Convert the audio file to OGG format
-                    audio = AudioSegment.from_mp3(mp3_file_path)
-                    ogg_file = mp3_file_path.replace(".mp3", ".wav")
-                    audio.export(ogg_file, format="wav")
-
-                    # transcribe audio file
-                    # use the audio file as the audio source
-                    r = sr.Recognizer()
-                    with sr.AudioFile(wav_file_path) as source:
-                        audio = r.record(
-                            source)  # read the entire audio file
-
-                        transcript = r.recognize_google(audio, language="pt-BR")
-                    print(transcript)
-
-                except Exception as err:
-                    log(str(err), "error")
-                    bot.send_message(message.from_user.id, "Error")
-                else:
-                    bot.send_message(message.from_user.id,
-                                     "Tá aqui o que você quer:")
-                    bot.send_message(message.chat.id, transcript)
-            finally:
-                clean()
+            base_reply(bot, message, "audio")
 
         log("Bot started.")
         bot.polling(none_stop=False, interval=0, timeout=20)
