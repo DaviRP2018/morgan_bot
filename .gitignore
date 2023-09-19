@@ -1,6 +1,7 @@
 # User
 .vscode
 .idea
+tmp/*
 
 
 # Byte-compiled / optimized / DLL files
