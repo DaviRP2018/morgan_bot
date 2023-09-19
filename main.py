@@ -8,6 +8,7 @@ import speech_recognition as sr
 import telebot
 
 from decouple import config
+from gtts import gTTS
 from pydub import AudioSegment
 from telebot.types import Message
 
@@ -86,14 +87,14 @@ def error_message(bot, message, err):
     log(str(err), "error")
     bot.send_message(
         message.from_user.id,
-        "Erro de conexão, por favor tente novamente mais tarde.",
+        "Que preguiça, tente novamente mais tarde",
     )
 
 
 def prepare_audio(bot, message, sound_source):
     try:
-        log("Escutando seu audio...")
-        bot.send_message(message.from_user.id, "Escutando seu audio...")
+        log("Estou ouvindo seu audio")
+        bot.send_message(message.from_user.id, "Estou ouvindo seu audio")
 
         source = getattr(message, sound_source)
 
@@ -152,6 +153,38 @@ def prepare_audio(bot, message, sound_source):
         bot.send_message(message.chat.id, transcript)
 
 
+def text_to_speech(bot, message):
+    try:
+        log("Estou gravando seu audio")
+        bot.send_message(message.from_user.id, "Estou gravando seu audio")
+        # The text that you want to convert to audio
+
+        text = message.text
+        log(text)
+
+        # Language in which you want to convert
+        language = "pt-br"
+
+        # Passing the text and language to the engine,
+        # here we have marked slow=False. Which tells
+        # the module that the converted audio should
+        # have a high speed
+
+        sound = gTTS(text=text, lang=language, slow=False)
+
+        # Saving the converted audio in a mp3 file named
+        # speech
+        sound.save("tmp/speech.mp3")
+
+        bot.send_audio(
+            chat_id=message.chat.id,
+            title="Morgan fala",
+            audio=open("tmp/speech.mp3", "rb"),
+        )
+    except Exception as err:
+        error_message(bot, message, err)
+
+
 def base_reply(bot, message, sound_source):
     try:
         save_user(message)
@@ -170,10 +203,13 @@ def main() -> None:
         def send_welcome(message: Message) -> None:
             bot.reply_to(
                 message,
-                "Bem vindo! Me grave um audio"
-                " ou encaminhe um audio mp3 e"
-                " eu vou tentar transcrever para você usando o Google.",
+                "Bem vindo! Eu sou capaz de gravar audios do que você"
+                " me escreve e também de escrever os audios que você me mandar",
             )
+
+        @bot.message_handler(func=lambda m: True, content_types=["text"])
+        def reply_text(message: Message) -> None:
+            text_to_speech(bot, message)
 
         @bot.message_handler(func=lambda m: True, content_types=["voice"])
         def reply_voice(message: Message) -> None:
