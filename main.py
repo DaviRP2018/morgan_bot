@@ -96,13 +96,13 @@ def error_message(bot, message, err):
 def prepare_audio(bot, message, sound_source):
     try:
         source = getattr(message, sound_source)
-        if source.duration <= 60:
+        if source.duration < 60:
             log(f"Estou ouvindo seu audio -- {source.duration}")
             bot.send_message(message.chat.id, "Estou ouvindo seu audio")
-        elif source.duration > 60:
+        elif 60 <= source.duration < 120:
             log(f"Esse vai demorar um pouco -- {source.duration}")
             bot.reply_to(message, "Esse vai demorar um pouco")
-        elif source.duration > 300:
+        elif 120 <= source.duration < 240:
             log(
                 f"Esse vai demorar bastante,"
                 f" te aviso quando acabar de ouvir -- {source.duration}"
@@ -111,12 +111,29 @@ def prepare_audio(bot, message, sound_source):
                 message,
                 "Esse vai demorar bastante, te aviso quando acabar de ouvir",
             )
-        elif source.duration > 600:
+        elif 240 <= source.duration < 480:
             log(f"Te mandaram um podcast? -- {source.duration}")
             bot.reply_to(
                 message,
                 "Te mandaram um podcast?"
                 " Assim que eu acabar de ouvir te mando mensagem",
+            )
+        elif source.duration >= 480:
+            log(f"Audio gigantesco -- {source.duration}")
+            bot.send_animation(
+                chat_id=message.chat.id,
+                animation=InputFile(
+                    open("gifs/surprised/giphy_surprised_1.gif", "rb")
+                ),
+            )
+            bot.send_message(
+                message.chat.id, f"{parse_time(source.duration)} de audio..."
+            )
+            bot.send_message(
+                message.chat.id,
+                "Minha versão não paga não vai aguentar"
+                " tanto tempo de espera pra te responder."
+                " Mas vou tentar.",
             )
 
         # Download file
@@ -212,22 +229,34 @@ def text_to_speech(bot, message):
 
 
 def base_reply(bot, message, sound_source):
-    error = False
-
     try:
         save_user(message)
-    except Exception as err:  # noqa
-        error = True
+    except Exception as err:
+        log(str(err), "error")
 
     try:
         prepare_audio(bot, message, sound_source)
-    except Exception as err:  # noqa
-        error = True
+    except Exception as err:
+        error_message(bot, message, err)
 
-    if error:
-        error_message(bot, message, err)  # noqa
     # finally:
     #     clean(file_unique_path)
+
+
+def parse_time(seconds):
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+
+    result = ""
+    if hours > 0:
+        result += f"{hours} hora{'s' if hours > 1 else ''} "
+    if minutes > 0:
+        result += f"{minutes} minuto{'s' if minutes > 1 else ''} "
+    if seconds > 0:
+        result += f"{seconds} segundo{'s' if seconds > 1 else ''}"
+
+    return result.strip()
 
 
 def main() -> None:
@@ -277,7 +306,7 @@ def main() -> None:
             base_reply(bot, message, "audio")
 
         log("Bot started.")
-        bot.polling(none_stop=False, interval=0, timeout=20)
+        bot.polling(none_stop=False, interval=0, timeout=60)
     except Exception as err:
         log(str(err), "error")
 
