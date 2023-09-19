@@ -13,7 +13,7 @@ from telebot.types import Message
 
 
 SAVE_PATH = "tmp"
-VALID_MIME_TYPES = ["mp3", "flv", "ogg", "wav"]
+VALID_MIME_TYPES = ["ogg", "mp3", "wav", "flv"]
 
 
 def log(message: str, level: str = "info") -> None:
@@ -118,6 +118,7 @@ def prepare_audio(bot, message, sound_source):
             except Exception as err:
                 log(str(err), "error")
                 mime_type = VALID_MIME_TYPES[tries]
+                log(f"Trying with mime_type: {mime_type}")
                 tries += 1
         if trying:
             raise Exception("Couldn't convert file")
