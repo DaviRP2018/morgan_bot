@@ -109,7 +109,7 @@ def prepare_audio(bot, message, sound_source):
 
         tries = 0
         trying = True
-        while tries <= 3 or trying:
+        while tries <= 3 and trying:
             try:
                 audio = AudioSegment.from_file(file_unique_path, mime_type)
                 wav_file = file_unique_path.replace(f".{mime_type}", ".wav")
@@ -123,13 +123,21 @@ def prepare_audio(bot, message, sound_source):
             raise Exception("Couldn't convert file")
         # Convert the audio file to OGG format
 
+        language_code = message.from_user.language_code.split("-")
+        country = language_code[1].upper()
+        raw_language = language_code[0]
+        language = f"{raw_language}-{country}"
+
         # transcribe audio file
         # use the audio file as the audio source
         r = sr.Recognizer()
         with sr.AudioFile(wav_file) as source:
             audio = r.record(source)  # read the entire audio file
-
-            transcript = r.recognize_google(audio, language="pt-BR")
+            try:
+                transcript = r.recognize_google(audio, language=language)
+            except Exception as err:
+                log(str(err), "error")
+                transcript = r.recognize_google(audio, language="pt-BR")
         print(transcript)
 
     except Exception as err:
