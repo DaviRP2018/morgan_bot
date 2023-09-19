@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 
 from datetime import date, datetime
 
@@ -10,7 +11,7 @@ import telebot
 from decouple import config
 from gtts import gTTS
 from pydub import AudioSegment
-from telebot.types import Message
+from telebot.types import InputFile, Message
 
 
 SAVE_PATH = "tmp"
@@ -205,6 +206,28 @@ def main() -> None:
                 message,
                 "Bem vindo! Eu sou capaz de gravar audios do que você"
                 " me escreve e também de escrever os audios que você me mandar",
+            )
+
+        @bot.message_handler(
+            func=lambda m: True,
+            content_types=[
+                "photo",
+                "video",
+                "document",
+                "location",
+                "contact",
+                "sticker",
+            ],
+        )
+        def reply_unsuported(message: Message) -> None:
+            log("wat?")
+            log(f"Received message type: {message.content_type}")
+            bot.reply_to(message, "wat?")
+            gif_idx = random.randint(1, 2)
+            log(f"Selected gif: {gif_idx}")
+            bot.send_animation(
+                chat_id=message.chat.id,
+                animation=InputFile(open(f"gifs/giphy_{gif_idx}.gif", "rb")),
             )
 
         @bot.message_handler(func=lambda m: True, content_types=["text"])
