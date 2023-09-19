@@ -86,10 +86,11 @@ def clean(file_unique_path) -> None:
 
 def error_message(bot, message, err):
     log(str(err), "error")
-    bot.send_message(
-        message.from_user.id,
-        "Que preguiça, tente novamente mais tarde",
+    bot.send_animation(
+        chat_id=message.chat.id,
+        animation=InputFile(open("gifs/error/giphy_error_1.gif", "rb")),
     )
+    bot.send_message(message.from_user.id, "Deu ruim")
 
 
 def prepare_audio(bot, message, sound_source):
