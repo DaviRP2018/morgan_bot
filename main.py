@@ -15,7 +15,7 @@ from telebot.types import InputFile, Message
 
 
 SAVE_PATH = "tmp"
-VALID_MIME_TYPES = ["ogg", "mp3", "wav", "flv"]
+VALID_MIME_TYPES = ["ogg", "mp3", "wav", "flv", "m4a"]
 
 
 def log(message: str, level: str = "info") -> None:
@@ -90,29 +90,55 @@ def error_message(bot, message, err):
         chat_id=message.chat.id,
         animation=InputFile(open("gifs/error/giphy_error_1.gif", "rb")),
     )
-    bot.send_message(message.from_user.id, "Deu ruim")
+    bot.send_message(message.chat.id, "Deu ruim")
 
 
 def prepare_audio(bot, message, sound_source):
     try:
-        log("Estou ouvindo seu audio")
-        bot.send_message(message.from_user.id, "Estou ouvindo seu audio")
-
         source = getattr(message, sound_source)
+        if source.duration <= 60:
+            log(f"Estou ouvindo seu audio -- {source.duration}")
+            bot.send_message(message.chat.id, "Estou ouvindo seu audio")
+        elif source.duration > 60:
+            log(f"Esse vai demorar um pouco -- {source.duration}")
+            bot.reply_to(message, "Esse vai demorar um pouco")
+        elif source.duration > 300:
+            log(
+                f"Esse vai demorar bastante,"
+                f" te aviso quando acabar de ouvir -- {source.duration}"
+            )
+            bot.reply_to(
+                message,
+                "Esse vai demorar bastante, te aviso quando acabar de ouvir",
+            )
+        elif source.duration > 600:
+            log(f"Te mandaram um podcast? -- {source.duration}")
+            bot.reply_to(
+                message,
+                "Te mandaram um podcast?"
+                " Assim que eu acabar de ouvir te mando mensagem",
+            )
 
         # Download file
         file_info = bot.get_file(source.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
 
         # Parse to WAV
+        log(f"File mime type is: {source.mime_type}")
         mime_type = source.mime_type.replace("audio/", "")
+        if mime_type == "mpeg":
+            log(
+                f"Probably a whatsapp voice, changing"
+                f" mime type from {mime_type} to m4a"
+            )
+            mime_type = "m4a"
         file_unique_path = f"{SAVE_PATH}/{source.file_unique_id}.{mime_type}"
         with open(file_unique_path, "wb") as new_file:
             new_file.write(downloaded_file)
 
         tries = 0
         trying = True
-        while tries <= 3 and trying:
+        while tries < len(VALID_MIME_TYPES) and trying:
             try:
                 audio = AudioSegment.from_file(file_unique_path, mime_type)
                 wav_file = file_unique_path.replace(f".{mime_type}", ".wav")
@@ -146,26 +172,24 @@ def prepare_audio(bot, message, sound_source):
 
     except Exception as err:
         log(str(err), "error")
-        bot.send_message(
-            message.from_user.id, "Oops, tente novamente mais tarde!"
-        )
+        raise err
     else:
         log("Tá aqui o que você quer")
-        bot.send_message(message.from_user.id, "Tá aqui o que você quer")
-        bot.send_message(message.chat.id, transcript)
+        bot.send_message(message.chat.id, "Tá aqui o que você quer")
+        bot.reply_to(message, transcript)
 
 
 def text_to_speech(bot, message):
     try:
         log("Estou gravando seu audio")
-        bot.send_message(message.from_user.id, "Estou gravando seu audio")
+        bot.send_message(message.chat.id, "Estou gravando seu audio")
         # The text that you want to convert to audio
 
         text = message.text
         log(text)
 
         # Language in which you want to convert
-        language = "pt-br"
+        language = "pt"
 
         # Passing the text and language to the engine,
         # here we have marked slow=False. Which tells
@@ -180,7 +204,7 @@ def text_to_speech(bot, message):
 
         bot.send_audio(
             chat_id=message.chat.id,
-            title="Morgan fala",
+            title="MorganBot fala",
             audio=open("tmp/speech.mp3", "rb"),
         )
     except Exception as err:
@@ -188,11 +212,20 @@ def text_to_speech(bot, message):
 
 
 def base_reply(bot, message, sound_source):
+    error = False
+
     try:
         save_user(message)
-    except Exception as err:
-        error_message(bot, message, err)
-    prepare_audio(bot, message, sound_source)
+    except Exception as err:  # noqa
+        error = True
+
+    try:
+        prepare_audio(bot, message, sound_source)
+    except Exception as err:  # noqa
+        error = True
+
+    if error:
+        error_message(bot, message, err)  # noqa
     # finally:
     #     clean(file_unique_path)
 
